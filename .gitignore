@@ -1,6 +1,19 @@
-# Ignore datasets
-data/*.csv
+# Local datasets
+ data/*.csv
+
+# Python environments and caches
+.venv/
 venv/
 __pycache__/
-*.pyc
-.vscode
+*.py[cod]
+
+# Generated model artifacts
+models/*.pkl
+
+# Generated evaluation outputs
+outputs/*.csv
+outputs/*.png
+outputs/*.txt
+
+# Editor settings
+.vscode/

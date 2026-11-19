@@ -1,5 +1,5 @@
 # Local datasets
- data/*.csv
+data/*.csv
 
 # Python environments and caches
 .venv/

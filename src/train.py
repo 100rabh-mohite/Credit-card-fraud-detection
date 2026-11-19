@@ -175,8 +175,10 @@ class ModelTrainer:
         self, X_train, y_train, X_valid, y_valid
     ):
         results = []
-        trained_models = {}
-        thresholds = {}
+        best_model = None
+        best_name = None
+        best_threshold = 0.5
+        best_f1 = -1.0
 
         print("\nTraining models and selecting thresholds on validation data...")
         for name, model in self.build_models().items():
@@ -189,8 +191,6 @@ class ModelTrainer:
             )
             valid_predictions = (valid_probabilities >= threshold).astype(int)
 
-            trained_models[name] = model
-            thresholds[name] = threshold
             results.append(
                 {
                     "Model": name,
@@ -208,18 +208,23 @@ class ModelTrainer:
                 }
             )
 
+            # Keep only the current best model to limit RAM usage on smaller laptops.
+            if valid_f1 > best_f1:
+                best_model = model
+                best_name = name
+                best_threshold = threshold
+                best_f1 = valid_f1
+
         results_df = pd.DataFrame(results).sort_values(
             "Validation F1", ascending=False
         )
         results_df.to_csv(MODEL_DIR / "model_results.csv", index=False)
         print("\nValidation model comparison:")
         print(results_df.to_string(index=False))
-
-        best_name = results_df.iloc[0]["Model"]
         print(f"\nSelected model: {best_name}")
-        print(f"Selected threshold: {thresholds[best_name]:.6f}")
+        print(f"Selected threshold: {best_threshold:.6f}")
 
-        return trained_models[best_name], thresholds[best_name], best_name
+        return best_model, best_threshold, best_name
 
     @staticmethod
     def save_artifacts(

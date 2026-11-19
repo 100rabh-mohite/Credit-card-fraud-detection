@@ -1,112 +1,68 @@
+"""Load the saved pipeline artifacts and predict one transaction."""
+
+from pathlib import Path
+
 import joblib
+import numpy as np
 import pandas as pd
+
+MODEL_DIR = Path("models")
 
 
 class FraudPredictor:
-
     def __init__(self):
+        required = [
+            "model.pkl", "scaler.pkl", "threshold.pkl", "feature_names.pkl"
+        ]
+        missing = [name for name in required if not (MODEL_DIR / name).exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"Missing artifacts: {', '.join(missing)}. Train the model first."
+            )
 
-        self.model_path = "models/model.pkl"
-        self.scaler_path = "models/scaler.pkl"
-
-        self.model = joblib.load(
-            self.model_path
-        )
-
-        self.scaler = joblib.load(
-            self.scaler_path
-        )
-
+        self.model = joblib.load(MODEL_DIR / "model.pkl")
+        self.scaler = joblib.load(MODEL_DIR / "scaler.pkl")
+        self.threshold = float(joblib.load(MODEL_DIR / "threshold.pkl"))
+        self.feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
 
     def predict(self, transaction):
+        """Return class, fraud probability, and the applied threshold."""
+        if not isinstance(transaction, dict):
+            raise TypeError("transaction must be a dictionary of feature values.")
+
+        missing = sorted(set(self.feature_names) - set(transaction))
+        extra = sorted(set(transaction) - set(self.feature_names))
+        if missing or extra:
+            raise ValueError(
+                f"Feature mismatch. Missing: {missing or 'none'}; "
+                f"unexpected: {extra or 'none'}."
+            )
 
         data = pd.DataFrame(
-            [transaction]
+            [[transaction[name] for name in self.feature_names]],
+            columns=self.feature_names,
         )
+        data = data.apply(pd.to_numeric, errors="raise")
 
-        data_scaled = self.scaler.transform(
-            data
-        )
+        if not np.isfinite(data.to_numpy(dtype=float)).all():
+            raise ValueError("All feature values must be finite numbers.")
 
-        prediction = self.model.predict(
-            data_scaled
-        )
+        scaled = self.scaler.transform(data)
+        probability = float(self.model.predict_proba(scaled)[0, 1])
+        prediction = int(probability >= self.threshold)
+        label = "Fraud Transaction" if prediction else "Normal Transaction"
 
-        probability = self.model.predict_proba(
-            data_scaled
-        )[0][1]
-
-
-        if prediction[0] == 1:
-
-            result = "Fraud Transaction"
-
-        else:
-
-            result = "Normal Transaction"
-
-
-        return result, probability
-
+        return label, probability, self.threshold
 
 
 if __name__ == "__main__":
-
-
     predictor = FraudPredictor()
 
+    # Example only: replace these values with a real row from your dataset.
+    sample_transaction = {name: 0.0 for name in predictor.feature_names}
+    sample_transaction["Amount"] = 50.0
 
-    # Example transaction
-    # Must contain the same 30 features as dataset
-
-    sample_transaction = {
-
-        "Time": 406,
-        "V1": -1.35,
-        "V2": 0.42,
-        "V3": 1.15,
-        "V4": 0.23,
-        "V5": -0.12,
-        "V6": 0.45,
-        "V7": 0.31,
-        "V8": -0.22,
-        "V9": 0.11,
-        "V10": -0.55,
-        "V11": 0.25,
-        "V12": -0.33,
-        "V13": 0.04,
-        "V14": -0.76,
-        "V15": 0.18,
-        "V16": -0.44,
-        "V17": 0.32,
-        "V18": -0.15,
-        "V19": 0.21,
-        "V20": 0.08,
-        "V21": -0.10,
-        "V22": 0.05,
-        "V23": 0.02,
-        "V24": 0.11,
-        "V25": -0.04,
-        "V26": 0.07,
-        "V27": 0.01,
-        "V28": 0.03,
-        "Amount": 50
-
-    }
-
-
-    result, probability = predictor.predict(
-        sample_transaction
-    )
-
-
-    print(
-        "Prediction:",
-        result
-    )
-
-
-    print(
-        "Fraud Probability:",
-        round(probability,4)
-    )
+    result, probability, threshold = predictor.predict(sample_transaction)
+    print(f"Prediction: {result}")
+    print(f"Fraud probability: {probability:.4%}")
+    print(f"Decision threshold: {threshold:.4f}")
